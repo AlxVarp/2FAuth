@@ -24,3 +24,5 @@ yarn-error.log
 /.idea
 /.vscode
 /resources/lang/php_*.json
+docker/docker-compose.pbx.yml
+docker/.env.pbx

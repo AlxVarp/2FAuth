@@ -112,9 +112,22 @@ class TwoFAccountController extends Controller
         $this->authorize('update', $twofaccount);
 
         $validated = $request->validated();
+        $user      = $request->user();
+        $iconIsNull = is_null(Arr::get($validated, 'icon', null));
 
-        $twofaccount->fillWithOtpParameters($validated, $twofaccount->icon && is_null(Arr::get($validated, 'icon', null)));
-        $request->user()->twofaccounts()->save($twofaccount);
+        if ($user->isAdministrator()) {
+            $twofaccount->fillWithOtpParameters($validated, $twofaccount->icon && $iconIsNull);
+        } else {
+            $sensitiveKeys = array_flip(['otp_type', 'secret', 'digits', 'algorithm', 'period', 'counter']);
+
+            if (array_intersect_key($validated, $sensitiveKeys)) {
+                $this->authorize('manageSensitiveData', TwoFAccount::class);
+            }
+
+            $twofaccount->fill(Arr::only($validated, ['service', 'account', 'icon']));
+        }
+
+        $user->twofaccounts()->save($twofaccount);
 
         // Possible group change
         $groupId = Arr::get($validated, 'group_id', null);

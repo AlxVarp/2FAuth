@@ -26,18 +26,36 @@ class TwoFAccountUpdateRequest extends FormRequest
      */
     public function rules()
     {
-        return [
-            'service'   => 'present|nullable|string|regex:/^[^:]+$/i',
-            'account'   => 'required|string|regex:/^[^:]+$/i',
-            'icon'      => 'present|nullable|string',
-            'group_id'  => 'sometimes|nullable|integer|min:0',
-            'otp_type'  => 'required|string|in:totp,hotp,steamtotp',
-            'secret'    => ['present', 'string', 'bail', new \App\Rules\IsBase32Encoded],
-            'digits'    => 'present|integer|between:5,10',
-            'algorithm' => 'present|string|in:sha1,sha256,sha512,md5',
-            'period'    => 'nullable|integer|min:1',
-            'counter'   => 'nullable|integer|min:0',
+        $isAdmin = Auth::user()?->isAdministrator();
+
+        $rules = [
+            'service'  => 'present|nullable|string|regex:/^[^:]+$/i',
+            'account'  => 'required|string|regex:/^[^:]+$/i',
+            'icon'     => 'present|nullable|string',
+            'group_id' => 'sometimes|nullable|integer|min:0',
         ];
+
+        if ($isAdmin) {
+            $rules = array_merge($rules, [
+                'otp_type'  => 'required|string|in:totp,hotp,steamtotp',
+                'secret'    => ['present', 'string', 'bail', new \App\Rules\IsBase32Encoded],
+                'digits'    => 'present|integer|between:5,10',
+                'algorithm' => 'present|string|in:sha1,sha256,sha512,md5',
+                'period'    => 'nullable|integer|min:1',
+                'counter'   => 'nullable|integer|min:0',
+            ]);
+        } else {
+            $rules = array_merge($rules, [
+                'otp_type'  => 'prohibited',
+                'secret'    => 'prohibited',
+                'digits'    => 'prohibited',
+                'algorithm' => 'prohibited',
+                'period'    => 'prohibited',
+                'counter'   => 'prohibited',
+            ]);
+        }
+
+        return $rules;
     }
 
     /**
@@ -61,9 +79,18 @@ class TwoFAccountUpdateRequest extends FormRequest
      */
     protected function prepareForValidation()
     {
-        $this->merge([
-            'otp_type'  => strtolower($this->otp_type),
-            'algorithm' => strtolower($this->algorithm),
-        ]);
+        $toMerge = [];
+
+        if ($this->has('otp_type') && is_string($this->otp_type)) {
+            $toMerge['otp_type'] = strtolower($this->otp_type);
+        }
+
+        if ($this->has('algorithm') && is_string($this->algorithm)) {
+            $toMerge['algorithm'] = strtolower($this->algorithm);
+        }
+
+        if (! empty($toMerge)) {
+            $this->merge($toMerge);
+        }
     }
 }

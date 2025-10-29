@@ -25,7 +25,9 @@ class TwoFAccountCollection extends ResourceCollection
         // The underlying TwoFAccountReadResource hides the secret only when withSecret == false.
         // When withSecret is provided the underlying resource will return secret according to the parameter value
         // If no withSecret is set we force it to false to ensure the secret will not being returned.
-        if (! $request->has('withSecret')) {
+        if (! $request->user()?->isAdministrator()) {
+            $request->merge(['withSecret' => false]);
+        } elseif (! $request->has('withSecret')) {
             $request->merge(['withSecret' => false]);
         }
 

@@ -26,19 +26,28 @@ class TwoFAccountStoreResource extends JsonResource
      */
     public function toArray($request)
     {
+        $user = $request->user();
+        $isAdmin = $user && method_exists($user, 'isAdministrator') ? $user->isAdministrator() : false;
+
+        $shouldExposeSecret = $isAdmin && (
+            ! $request->has('withSecret') ||
+            (int) filter_var($request->input('withSecret'), FILTER_VALIDATE_BOOLEAN) == 1
+        );
+
         return [
             'otp_type' => $this->otp_type,
             'account'  => $this->account,
             'service'  => $this->service,
             'icon'     => $this->icon && IconStore::exists($this->icon) ? $this->icon : null,
-            'secret'   => $this->when(
-                ! $request->has('withSecret') || (int) filter_var($request->input('withSecret'), FILTER_VALIDATE_BOOLEAN) == 1,
-                $this->secret
-            ),
-            'digits'    => (int) $this->digits,
-            'algorithm' => $this->algorithm,
-            'period'    => is_null($this->period) ? null : (int) $this->period,
-            'counter'   => is_null($this->counter) ? null : (int) $this->counter,
+            'secret'   => $shouldExposeSecret ? $this->secret : null,
+            'digits'    => $isAdmin ? (int) $this->digits : null,
+            'algorithm' => $isAdmin ? $this->algorithm : null,
+            'period'   => $isAdmin
+                ? (is_null($this->period) ? null : (int) $this->period)
+                : null,
+            'counter'  => $isAdmin
+                ? (is_null($this->counter) ? null : (int) $this->counter)
+                : null,
         ];
     }
 }

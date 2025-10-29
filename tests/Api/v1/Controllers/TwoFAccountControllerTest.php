@@ -50,6 +50,11 @@ class TwoFAccountControllerTest extends FeatureTestCase
      */
     protected $user;
 
+    /**
+     * @var \App\Models\User|\Illuminate\Contracts\Auth\Authenticatable
+     */
+    protected $admin;
+
     protected $anotherUser;
 
     /**
@@ -83,10 +88,6 @@ class TwoFAccountControllerTest extends FeatureTestCase
         'account',
         'icon',
         'otp_type',
-        'digits',
-        'algorithm',
-        'period',
-        'counter',
     ];
 
     private const VALID_RESOURCE_STRUCTURE_WITH_SECRET = [
@@ -129,11 +130,6 @@ class TwoFAccountControllerTest extends FeatureTestCase
         'account',
         'icon',
         'otp_type',
-        'secret',
-        'digits',
-        'algorithm',
-        'period',
-        'counter',
         'otp' => self::VALID_EMBEDDED_OTP_RESOURCE_STRUCTURE_FOR_TOTP,
     ];
 
@@ -144,10 +140,6 @@ class TwoFAccountControllerTest extends FeatureTestCase
         'account',
         'icon',
         'otp_type',
-        'digits',
-        'algorithm',
-        'period',
-        'counter',
         'otp' => self::VALID_EMBEDDED_OTP_RESOURCE_STRUCTURE_FOR_TOTP,
     ];
 
@@ -205,6 +197,18 @@ class TwoFAccountControllerTest extends FeatureTestCase
         'counter'   => null,
     ];
 
+    private const JSON_FRAGMENTS_FOR_CUSTOM_TOTP_SANITIZED = [
+        'service'  => OtpTestData::SERVICE,
+        'account'  => OtpTestData::ACCOUNT,
+        'otp_type' => 'totp',
+    ];
+
+    private const JSON_FRAGMENTS_FOR_DEFAULT_TOTP_SANITIZED = [
+        'service'  => null,
+        'account'  => OtpTestData::ACCOUNT,
+        'otp_type' => 'totp',
+    ];
+
     private const JSON_FRAGMENTS_FOR_CUSTOM_HOTP = [
         'service'   => OtpTestData::SERVICE,
         'account'   => OtpTestData::ACCOUNT,
@@ -225,6 +229,18 @@ class TwoFAccountControllerTest extends FeatureTestCase
         'algorithm' => OtpTestData::ALGORITHM_DEFAULT,
         'period'    => null,
         'counter'   => OtpTestData::COUNTER_DEFAULT,
+    ];
+
+    private const JSON_FRAGMENTS_FOR_CUSTOM_HOTP_SANITIZED = [
+        'service'  => OtpTestData::SERVICE,
+        'account'  => OtpTestData::ACCOUNT,
+        'otp_type' => 'hotp',
+    ];
+
+    private const JSON_FRAGMENTS_FOR_DEFAULT_HOTP_SANITIZED = [
+        'service'  => null,
+        'account'  => OtpTestData::ACCOUNT,
+        'otp_type' => 'hotp',
     ];
 
     private const ARRAY_OF_INVALID_PARAMETERS = [
@@ -253,6 +269,7 @@ class TwoFAccountControllerTest extends FeatureTestCase
         ]);
 
         $this->user       = User::factory()->create();
+        $this->admin      = User::factory()->administrator()->create();
         $this->userGroupA = Group::factory()->for($this->user)->create();
         $this->userGroupB = Group::factory()->for($this->user)->create();
 
@@ -276,6 +293,18 @@ class TwoFAccountControllerTest extends FeatureTestCase
         $this->twofaccountE = TwoFAccount::factory()->for($this->anotherUser)->create([
             'group_id' => $this->anotherUserGroupB->id,
         ]);
+    }
+
+    /**
+     * Build a sanitized payload for non-admin updates.
+     */
+    protected function sanitizedUpdatePayload(array $overrides = []) : array
+    {
+        return array_merge([
+            'service' => 'Updated Service',
+            'account' => 'updated-account@example.com',
+            'icon'    => null,
+        ], $overrides);
     }
 
     #[Test]
@@ -309,13 +338,13 @@ class TwoFAccountControllerTest extends FeatureTestCase
     public static function validResourceStructureProvider()
     {
         return [
-            'VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET' => [
+            'SANITIZED_DEFAULT_STRUCTURE' => [
                 '',
                 self::VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET,
             ],
-            'VALID_RESOURCE_STRUCTURE_WITH_SECRET' => [
+            'SANITIZED_STRUCTURE_EVEN_WHEN_SECRET_REQUESTED' => [
                 '?withSecret=1',
-                self::VALID_RESOURCE_STRUCTURE_WITH_SECRET,
+                self::VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET,
             ],
             'VALID_COLLECTION_RESOURCE_STRUCTURE_WITH_OTP' => [
                 '?withOtp=1',
@@ -383,12 +412,19 @@ class TwoFAccountControllerTest extends FeatureTestCase
     }
 
     #[Test]
-    public function test_show_returns_twofaccount_resource_with_secret()
+    public function test_show_returns_twofaccount_resource_without_sensitive_data_for_non_admin()
     {
         $response = $this->actingAs($this->user, 'api-guard')
             ->json('GET', '/api/v1/twofaccounts/' . $this->twofaccountA->id)
             ->assertOk()
-            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITH_SECRET);
+            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET);
+
+        $payload = $response->json();
+        $this->assertArrayNotHasKey('secret', $payload);
+        $this->assertArrayNotHasKey('digits', $payload);
+        $this->assertArrayNotHasKey('algorithm', $payload);
+        $this->assertArrayNotHasKey('period', $payload);
+        $this->assertArrayNotHasKey('counter', $payload);
     }
 
     #[Test]
@@ -398,6 +434,25 @@ class TwoFAccountControllerTest extends FeatureTestCase
             ->json('GET', '/api/v1/twofaccounts/' . $this->twofaccountA->id . '?withSecret=0')
             ->assertOk()
             ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET);
+
+        $payload = $response->json();
+        $this->assertArrayNotHasKey('secret', $payload);
+    }
+
+    #[Test]
+    public function test_admin_can_view_twofaccount_resource_with_sensitive_data()
+    {
+        $response = $this->actingAs($this->admin, 'api-guard')
+            ->json('GET', '/api/v1/twofaccounts/' . $this->twofaccountA->id . '?withSecret=1')
+            ->assertOk()
+            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITH_SECRET);
+
+        $payload = $response->json();
+        $this->assertArrayHasKey('secret', $payload);
+        $this->assertArrayHasKey('digits', $payload);
+        $this->assertArrayHasKey('algorithm', $payload);
+        $this->assertArrayHasKey('period', $payload);
+        $this->assertArrayHasKey('counter', $payload);
     }
 
     // #[Test]
@@ -472,7 +527,7 @@ class TwoFAccountControllerTest extends FeatureTestCase
         $response = $this->actingAs($this->user, 'api-guard')
             ->json('POST', '/api/v1/twofaccounts', $payload)
             ->assertCreated()
-            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITH_SECRET)
+            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET)
             ->assertJsonFragment($expected);
     }
 
@@ -485,7 +540,7 @@ class TwoFAccountControllerTest extends FeatureTestCase
         $response = $this->actingAs($this->user, 'api-guard')
             ->json('POST', '/api/v1/twofaccounts', $payload)
             ->assertCreated()
-            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITH_SECRET)
+            ->assertJsonStructure(self::VALID_RESOURCE_STRUCTURE_WITHOUT_SECRET)
             ->assertJsonFragment($expected);
     }
 
@@ -499,41 +554,41 @@ class TwoFAccountControllerTest extends FeatureTestCase
                 [
                     'uri' => OtpTestData::TOTP_FULL_CUSTOM_URI,
                 ],
-                self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP,
+                self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP_SANITIZED,
             ],
             'TOTP_SHORT_URI' => [
                 [
                     'uri' => OtpTestData::TOTP_SHORT_URI,
                 ],
-                self::JSON_FRAGMENTS_FOR_DEFAULT_TOTP,
+                self::JSON_FRAGMENTS_FOR_DEFAULT_TOTP_SANITIZED,
             ],
             'ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP' => [
                 OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP,
-                self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP,
+                self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP_SANITIZED,
             ],
             'ARRAY_OF_MINIMUM_VALID_PARAMETERS_FOR_TOTP' => [
                 OtpTestData::ARRAY_OF_MINIMUM_VALID_PARAMETERS_FOR_TOTP,
-                self::JSON_FRAGMENTS_FOR_DEFAULT_TOTP,
+                self::JSON_FRAGMENTS_FOR_DEFAULT_TOTP_SANITIZED,
             ],
             'HOTP_FULL_CUSTOM_URI' => [
                 [
                     'uri' => OtpTestData::HOTP_FULL_CUSTOM_URI,
                 ],
-                self::JSON_FRAGMENTS_FOR_CUSTOM_HOTP,
+                self::JSON_FRAGMENTS_FOR_CUSTOM_HOTP_SANITIZED,
             ],
             'HOTP_SHORT_URI' => [
                 [
                     'uri' => OtpTestData::HOTP_SHORT_URI,
                 ],
-                self::JSON_FRAGMENTS_FOR_DEFAULT_HOTP,
+                self::JSON_FRAGMENTS_FOR_DEFAULT_HOTP_SANITIZED,
             ],
             'ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_HOTP' => [
                 OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_HOTP,
-                self::JSON_FRAGMENTS_FOR_CUSTOM_HOTP,
+                self::JSON_FRAGMENTS_FOR_CUSTOM_HOTP_SANITIZED,
             ],
             'ARRAY_OF_MINIMUM_VALID_PARAMETERS_FOR_HOTP' => [
                 OtpTestData::ARRAY_OF_MINIMUM_VALID_PARAMETERS_FOR_HOTP,
-                self::JSON_FRAGMENTS_FOR_DEFAULT_HOTP,
+                self::JSON_FRAGMENTS_FOR_DEFAULT_HOTP_SANITIZED,
             ],
         ];
     }
@@ -711,28 +766,112 @@ class TwoFAccountControllerTest extends FeatureTestCase
     }
 
     #[Test]
-    public function test_update_totp_returns_success_with_updated_resource()
+    public function test_non_admin_can_update_metadata_without_sensitive_fields()
     {
+        $originalSecret = $this->twofaccountA->secret;
+
+        $payload = $this->sanitizedUpdatePayload();
+
         $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP)
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $payload)
             ->assertOk()
-            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP);
+            ->assertJsonFragment([
+                'service' => $payload['service'],
+                'account' => $payload['account'],
+            ]);
+
+        $data = $response->json();
+        $this->assertArrayNotHasKey('secret', $data);
+        $this->assertArrayNotHasKey('digits', $data);
+        $this->assertArrayNotHasKey('algorithm', $data);
+        $this->assertArrayNotHasKey('period', $data);
+        $this->assertArrayNotHasKey('counter', $data);
+
+        $this->twofaccountA->refresh();
+        $this->assertSame($originalSecret, $this->twofaccountA->secret);
+        $this->assertSame($payload['service'], $this->twofaccountA->service);
+        $this->assertSame($payload['account'], $this->twofaccountA->account);
     }
 
     #[Test]
-    public function test_update_hotp_returns_success_with_updated_resource()
+    public function test_non_admin_cannot_update_sensitive_fields()
     {
-        $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_HOTP)
+        $this->actingAs($this->user, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, array_merge(
+                $this->sanitizedUpdatePayload(),
+                ['secret' => 'AAAAAAAAAAAAAAAQ']
+            ))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['secret']);
+    }
+
+    #[Test]
+    public function test_admin_can_update_totp_with_sensitive_fields()
+    {
+        $payload = array_merge(
+            OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP,
+            [
+                'service' => 'Admin Service',
+                'account' => 'admin@example.com',
+            ]
+        );
+
+        $response = $this->actingAs($this->admin, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $payload)
             ->assertOk()
-            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_HOTP);
+            ->assertJsonFragment([
+                'service' => 'Admin Service',
+                'account' => 'admin@example.com',
+            ])
+            ->assertJsonFragment([
+                'otp_type' => 'totp',
+            ]);
+
+        $data = $response->json();
+        $this->assertArrayHasKey('secret', $data);
+        $this->assertArrayHasKey('digits', $data);
+        $this->assertArrayHasKey('algorithm', $data);
+        $this->assertArrayHasKey('period', $data);
+
+        $this->twofaccountA->refresh();
+        $this->assertSame($payload['secret'], $this->twofaccountA->secret);
+        $this->assertSame($payload['digits'], $this->twofaccountA->digits);
+        $this->assertSame($payload['period'], $this->twofaccountA->period);
+    }
+
+    #[Test]
+    public function test_admin_can_switch_account_to_hotp()
+    {
+        $payload = array_merge(
+            OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_HOTP,
+            [
+                'service' => 'Admin HOTP Service',
+                'account' => 'hotp-admin@example.com',
+            ]
+        );
+
+        $response = $this->actingAs($this->admin, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $payload)
+            ->assertOk()
+            ->assertJsonFragment([
+                'otp_type' => 'hotp',
+            ])
+            ->assertJsonFragment([
+                'account' => 'hotp-admin@example.com',
+            ]);
+
+        $data = $response->json();
+        $this->assertArrayHasKey('counter', $data);
+        $this->twofaccountA->refresh();
+        $this->assertSame('hotp', $this->twofaccountA->otp_type);
+        $this->assertSame($payload['counter'], $this->twofaccountA->counter);
     }
 
     #[Test]
     public function test_update_missing_twofaccount_returns_not_found()
     {
-        $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/1000', OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP)
+        $this->actingAs($this->user, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/1000', $this->sanitizedUpdatePayload())
             ->assertNotFound();
     }
 
@@ -742,15 +881,16 @@ class TwoFAccountControllerTest extends FeatureTestCase
         $this->assertNotEquals(null, $this->twofaccountA->group_id);
 
         $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, array_merge(
-                OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP,
-                ['group_id' => null]
-            ))
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $this->sanitizedUpdatePayload([
+                'group_id' => null,
+            ]))
             ->assertOk()
             ->assertJsonFragment([
                 'group_id' => null,
-            ])
-            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP);
+            ]);
+
+        $this->twofaccountA->refresh();
+        $this->assertNull($this->twofaccountA->group_id);
     }
 
     #[Test]
@@ -759,15 +899,16 @@ class TwoFAccountControllerTest extends FeatureTestCase
         $this->assertNotEquals(null, $this->twofaccountA->group_id);
 
         $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, array_merge(
-                OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP,
-                ['group_id' => 0]
-            ))
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $this->sanitizedUpdatePayload([
+                'group_id' => 0,
+            ]))
             ->assertOk()
             ->assertJsonFragment([
                 'group_id' => null,
-            ])
-            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP);
+            ]);
+
+        $this->twofaccountA->refresh();
+        $this->assertNull($this->twofaccountA->group_id);
     }
 
     #[Test]
@@ -776,43 +917,45 @@ class TwoFAccountControllerTest extends FeatureTestCase
         $this->assertEquals($this->userGroupA->id, $this->twofaccountA->group_id);
 
         $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, array_merge(
-                OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP,
-                ['group_id' => $this->userGroupB->id]
-            ))
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $this->sanitizedUpdatePayload([
+                'group_id' => $this->userGroupB->id,
+            ]))
             ->assertOk()
             ->assertJsonFragment([
                 'group_id' => $this->userGroupB->id,
-            ])
-            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP);
+            ]);
+
+        $this->twofaccountA->refresh();
+        $this->assertEquals($this->userGroupB->id, $this->twofaccountA->group_id);
     }
 
     #[Test]
     public function test_update_with_assignement_to_missing_groupid_returns_validation_error()
     {
-        $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, array_merge(
-                OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_TOTP,
-                ['group_id' => 9999999]
-            ))
+        $this->actingAs($this->user, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, $this->sanitizedUpdatePayload([
+                'group_id' => 9999999,
+            ]))
             ->assertJsonValidationErrorFor('group_id');
     }
 
     #[Test]
     public function test_update_twofaccount_with_invalid_data_returns_validation_error()
     {
-        $twofaccount = TwoFAccount::factory()->create();
-
-        $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, self::ARRAY_OF_INVALID_PARAMETERS)
+        $this->actingAs($this->user, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountA->id, [
+                'service' => null,
+                'account' => null,
+                'icon'    => null,
+            ])
             ->assertStatus(422);
     }
 
     #[Test]
     public function test_update_twofaccount_of_another_user_is_forbidden()
     {
-        $response = $this->actingAs($this->user, 'api-guard')
-            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountC->id, OtpTestData::ARRAY_OF_FULL_VALID_PARAMETERS_FOR_CUSTOM_HOTP)
+        $this->actingAs($this->user, 'api-guard')
+            ->json('PUT', '/api/v1/twofaccounts/' . $this->twofaccountC->id, $this->sanitizedUpdatePayload())
             ->assertForbidden()
             ->assertJsonStructure([
                 'message',
@@ -1203,7 +1346,7 @@ class TwoFAccountControllerTest extends FeatureTestCase
                 'uri' => OtpTestData::TOTP_FULL_CUSTOM_URI,
             ])
             ->assertOk()
-            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP);
+            ->assertJsonFragment(self::JSON_FRAGMENTS_FOR_CUSTOM_TOTP_SANITIZED);
     }
 
     #[Test]

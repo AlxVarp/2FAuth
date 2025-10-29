@@ -21,6 +21,11 @@ class QrCodeControllerTest extends FeatureTestCase
      */
     protected $user;
 
+    /**
+     * @var \App\Models\User|\Illuminate\Contracts\Auth\Authenticatable
+     */
+    protected $admin;
+
     protected $anotherUser;
 
     /**
@@ -33,6 +38,7 @@ class QrCodeControllerTest extends FeatureTestCase
         parent::setUp();
 
         $this->user        = User::factory()->create();
+        $this->admin       = User::factory()->administrator()->create();
         $this->anotherUser = User::factory()->create();
 
         $this->twofaccount = TwoFAccount::factory()->for($this->user)->create([
@@ -48,9 +54,9 @@ class QrCodeControllerTest extends FeatureTestCase
     }
 
     #[Test]
-    public function test_show_qrcode_returns_base64_image()
+    public function test_admin_can_show_qrcode_returns_base64_image()
     {
-        $response = $this->actingAs($this->user, 'api-guard')
+        $response = $this->actingAs($this->admin, 'api-guard')
             ->json('GET', '/api/v1/twofaccounts/' . $this->twofaccount->id . '/qrcode')
             ->assertJsonStructure([
                 'qrcode',
@@ -79,6 +85,39 @@ class QrCodeControllerTest extends FeatureTestCase
             ->assertForbidden()
             ->assertJsonStructure([
                 'message',
+            ]);
+    }
+
+    #[Test]
+    public function test_non_admin_owner_cannot_show_qrcode()
+    {
+        $this->actingAs($this->user, 'api-guard')
+            ->json('GET', '/api/v1/twofaccounts/' . $this->twofaccount->id . '/qrcode')
+            ->assertForbidden()
+            ->assertJsonStructure([
+                'message',
+            ]);
+    }
+
+    #[Test]
+    public function test_admin_can_show_qrcode_of_any_user()
+    {
+        $foreignAccount = TwoFAccount::factory()->for($this->anotherUser)->create([
+            'otp_type'   => 'totp',
+            'account'    => 'foreign-account',
+            'service'    => 'foreign-service',
+            'secret'     => 'A4GRFHZVRBGY7UIW',
+            'algorithm'  => 'sha1',
+            'digits'     => 6,
+            'period'     => 30,
+            'legacy_uri' => 'otpauth://totp/foreign-service:foreign-account?secret=A4GRFHZVRBGY7UIW',
+        ]);
+
+        $this->actingAs($this->admin, 'api-guard')
+            ->json('GET', '/api/v1/twofaccounts/' . $foreignAccount->id . '/qrcode')
+            ->assertOk()
+            ->assertJsonStructure([
+                'qrcode',
             ]);
     }
 

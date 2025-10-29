@@ -12,6 +12,17 @@ class TwoFAccountPolicy
     use HandlesAuthorization, OwnershipTrait;
 
     /**
+     * Grant all permissions to administrators.
+     *
+     * @param  string  $ability
+     * @return bool|null
+     */
+    public function before(User $user, $ability)
+    {
+        return $user->isAdministrator() ? true : null;
+    }
+
+    /**
      * Determine whether the user can view any models.
      *
      * @return \Illuminate\Auth\Access\Response|bool
@@ -139,6 +150,30 @@ class TwoFAccountPolicy
         }
 
         return $can;
+    }
+
+    /**
+     * Determine whether the user can view sensitive details of the model.
+     *
+     * @return \Illuminate\Auth\Access\Response|bool
+     */
+    public function viewSensitive(User $user, TwoFAccount $twofaccount)
+    {
+        Log::notice(sprintf('User ID #%s cannot view sensitive data of twofaccount ID #%s', $user->id, $twofaccount->id));
+
+        return false;
+    }
+
+    /**
+     * Determine whether the user can access sensitive features for the resource.
+     *
+     * @return \Illuminate\Auth\Access\Response|bool
+     */
+    public function manageSensitiveData(User $user)
+    {
+        Log::notice(sprintf('User ID #%s cannot access sensitive twofaccount data', $user->id));
+
+        return false;
     }
 
     /**

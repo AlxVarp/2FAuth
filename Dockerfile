@@ -18,7 +18,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY resources ./resources
 COPY public ./public
-COPY vite.config.js vite.version.js tsconfig.json eslint.config.js ./ 
+COPY config ./config
+COPY vite.config.js vite.version.js tsconfig.json eslint.config.js ./
 RUN npm run build
 
 FROM --platform=${BUILDPLATFORM} php:${PHP_VERSION} AS vendor

@@ -12,6 +12,15 @@ FROM --platform=${BUILDPLATFORM} composer:${COMPOSER_VERSION} AS build-composer
 FROM composer:${COMPOSER_VERSION} AS composer
 FROM qmcgaw/binpot:supervisord-${SUPERVISORD_VERSION} AS supervisord
 
+FROM node:20-alpine AS frontend
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY resources ./resources
+COPY public ./public
+COPY vite.config.js vite.version.js tsconfig.json eslint.config.js ./ 
+RUN npm run build
+
 FROM --platform=${BUILDPLATFORM} php:${PHP_VERSION} AS vendor
 ARG UID=1000
 ARG GID=1000
@@ -101,6 +110,7 @@ COPY --from=vendor --chown=${UID}:${GID} /srv/vendor /srv/vendor
 
 # Copy the rest of the code
 COPY --chown=${UID}:${GID} . .
+COPY --from=frontend --chown=${UID}:${GID} /app/public/build /srv/public/build
 # RUN composer dump-autoload --no-scripts --no-dev --optimize
 
 # Entrypoint

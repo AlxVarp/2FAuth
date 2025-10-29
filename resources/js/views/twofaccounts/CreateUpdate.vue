@@ -138,7 +138,11 @@
                     showOTP(response.data)
                 })
                 .catch(error => {
-                    if( error.response.data.errors.uri ) {
+                    if (error.response?.status === 403) {
+                        notify.warning({ text: trans('errors.unauthorized_legend') })
+                        showAdvancedForm.value = true
+                    }
+                    else if (error.response?.data?.errors?.uri) {
                         showAlternatives.value = true
                         showAdvancedForm.value = true
                     }
@@ -155,7 +159,11 @@
                     })
                 })
                 .catch(error => {
-                    if( error.response.data.errors.uri ) {
+                    if (error.response?.status === 403) {
+                        notify.warning({ text: trans('errors.unauthorized_legend') })
+                        showAdvancedForm.value = true
+                    }
+                    else if (error.response?.data?.errors?.uri) {
                         showAlternatives.value = true
                         showAdvancedForm.value = true
                     }
@@ -244,7 +252,16 @@
             deleteTempIcon()
         }
 
-        const { data } = await form.put('/api/v1/twofaccounts/' + props.twofaccountId)
+        const requestConfig = user.isAdmin ? {} : {
+            data: {
+                service: form.service,
+                account: form.account,
+                icon: form.icon,
+                group_id: form.group_id,
+            }
+        }
+
+        const { data } = await form.put('/api/v1/twofaccounts/' + props.twofaccountId, requestConfig)
 
         if( form.errors.any() === false ) {
             const index = twofaccounts.items.findIndex(acc => acc.id === data.id)
@@ -571,12 +588,18 @@
                 <!-- group -->
                 <FormSelect v-if="groups.length > 0" v-model="form.group_id" :options="groups" fieldName="group_id" label="twofaccounts.forms.group.label" help="twofaccounts.forms.group.help" />
                 <!-- otp type -->
-                <FormToggle v-model="form.otp_type" :isDisabled="isEditMode" :choices="otp_types" fieldName="otp_type" :fieldError="form.errors.get('otp_type')" label="twofaccounts.forms.otp_type.label" help="twofaccounts.forms.otp_type.help" :hasOffset="true" />
+                <FormToggle v-if="user.isAdmin || !isEditMode" v-model="form.otp_type" :isDisabled="isEditMode" :choices="otp_types" fieldName="otp_type" :fieldError="form.errors.get('otp_type')" label="twofaccounts.forms.otp_type.label" help="twofaccounts.forms.otp_type.help" :hasOffset="true" />
+                <div v-else class="field">
+                    <label class="label">{{ $t('twofaccounts.forms.otp_type.label') }}</label>
+                    <div class="control">
+                        <input class="input" type="text" :value="(form.otp_type || '').toUpperCase()" disabled>
+                    </div>
+                </div>
                 <div v-if="form.otp_type != ''">
                     <!-- secret -->
-                    <FormLockField :isEditMode="isEditMode" v-model.trimAll="form.secret" fieldName="secret" :fieldError="form.errors.get('secret')" label="twofaccounts.forms.secret.label" help="twofaccounts.forms.secret.help" />
+                    <FormLockField v-if="user.isAdmin || !isEditMode" :isEditMode="isEditMode" v-model.trimAll="form.secret" fieldName="secret" :fieldError="form.errors.get('secret')" label="twofaccounts.forms.secret.label" help="twofaccounts.forms.secret.help" />
                     <!-- Options -->
-                    <div v-if="form.otp_type !== 'steamtotp'">
+                    <div v-if="(user.isAdmin || !isEditMode) && form.otp_type !== 'steamtotp'">
                         <h2 class="title is-4 mt-5 mb-2">{{ $t('commons.options') }}</h2>
                         <p class="help mb-4">
                             {{ $t('twofaccounts.forms.options_help') }}
@@ -595,7 +618,7 @@
                     <p class="control">
                         <VueButton :id="isEditMode ? 'btnUpdate' : 'btnCreate'" :isLoading="form.isBusy" class="is-rounded" >{{ isEditMode ? $t('commons.save') : $t('commons.create') }}</VueButton>
                     </p>
-                    <p class="control" v-if="form.otp_type && form.secret">
+                    <p class="control" v-if="user.isAdmin && form.otp_type && form.secret">
                         <button id="btnPreview" type="button" class="button is-success is-rounded" @click="previewOTP">{{ $t('twofaccounts.forms.test') }}</button>
                     </p>
                     <ButtonBackCloseCancel action="cancel" :useLinkTag="false" @canceled="cancelCreation" />

@@ -24,7 +24,7 @@ const router = createRouter({
         { path: '/account/create', name: 'createAccount', component: () => import('../views/twofaccounts/CreateUpdate.vue'), meta: { middlewares: [authGuard, syncAppSettings, setReturnTo], watchedByKicker: true } },
         { path: '/account/import', name: 'importAccounts', component: () => import('../views/twofaccounts/Import.vue'), meta: { middlewares: [authGuard, syncAppSettings, setReturnTo], watchedByKicker: true } },
         { path: '/account/:twofaccountId/edit', name: 'editAccount', component: () => import('../views/twofaccounts/CreateUpdate.vue'), meta: { middlewares: [authGuard, syncAppSettings, setReturnTo], watchedByKicker: true }, props: true },
-        { path: '/account/:twofaccountId/qrcode', name: 'showQRcode', component: () => import('../views/twofaccounts/QRcode.vue'), meta: { middlewares: [authGuard, syncAppSettings, setReturnTo], watchedByKicker: true } },
+        { path: '/account/:twofaccountId/qrcode', name: 'showQRcode', component: () => import('../views/twofaccounts/QRcode.vue'), meta: { middlewares: [authGuard, syncAppSettings, adminOnly, setReturnTo], watchedByKicker: true } },
 
         { path: '/groups', name: 'groups', component: () => import('../views/groups/Groups.vue'), meta: { middlewares: [authGuard, syncAppSettings, setReturnTo], watchedByKicker: true }, props: true },
         { path: '/group/create', name: 'createGroup', component: () => import('../views/groups/CreateUpdate.vue'), meta: { middlewares: [authGuard, syncAppSettings, setReturnTo], watchedByKicker: true } },

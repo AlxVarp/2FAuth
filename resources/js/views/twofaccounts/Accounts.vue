@@ -466,7 +466,7 @@
                                     <RouterLink :to="{ name: 'editAccount', params: { twofaccountId: account.id }}" class="tag is-rounded mr-1" :class="mode == 'dark' ? 'is-dark' : 'is-white'">
                                         {{ $t('commons.edit') }}
                                     </RouterLink>
-                                    <RouterLink :to="{ name: 'showQRcode', params: { twofaccountId: account.id }}" class="tag is-rounded" :class="mode == 'dark' ? 'is-dark' : 'is-white'" :title="$t('twofaccounts.show_qrcode')">
+                                    <RouterLink v-if="user.isAdmin" :to="{ name: 'showQRcode', params: { twofaccountId: account.id }}" class="tag is-rounded" :class="mode == 'dark' ? 'is-dark' : 'is-white'" :title="$t('twofaccounts.show_qrcode')">
                                         <FontAwesomeIcon :icon="['fas', 'qrcode']" />
                                     </RouterLink>
                                 </div>

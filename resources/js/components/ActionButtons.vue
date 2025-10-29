@@ -65,7 +65,7 @@
             </button>
         </p>
         <!-- export button -->
-        <p class="control" v-if="inManagementMode">
+        <p class="control" v-if="inManagementMode && user.isAdmin">
             <button
                 id="btnExport" 
                 :disabled='areDisabled' class="button is-rounded"

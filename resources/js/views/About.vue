@@ -24,6 +24,10 @@
         <p class="block">
             ©Bubka <a class="is-size-7" href="https://github.com/Bubka/2FAuth/blob/master/LICENSE">AGPL-3.0 license</a>
         </p>
+        <p class="block is-size-7">
+            This instance runs a customized build maintained at
+            <a href="https://github.com/AlxVarp/2FAuth" target="_blank">github.com/AlxVarp/2FAuth</a>.
+        </p>
         <h2 class="title is-5 has-text-grey-light">
             {{ $t('commons.resources') }}
         </h2>
@@ -33,6 +37,12 @@
                     <FontAwesomeIcon :icon="['fab', 'github-alt']" />
                 </span>
                 <span>Github</span>
+            </a>
+            <a class="button" :class="{'is-dark' : mode == 'dark'}" href="https://github.com/AlxVarp/2FAuth" target="_blank">
+                <span class="icon is-small">
+                    <FontAwesomeIcon :icon="['fab', 'github']" />
+                </span>
+                <span>Fork</span>
             </a>
             <a class="button" :class="{'is-dark' : mode == 'dark'}" href="https://docs.2fauth.app/" target="_blank">
                 <span class="icon is-small">
